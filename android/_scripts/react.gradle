@@ -1,0 +1,157 @@
+/*
+* 重写/node_modules/react-native/react.gradle的实现逻辑:
+* 支持多业务分包方案, /react目录下以业务bundle名称作为文件夹名称来存放各个业务的bundle文件合关联的资源文件
+* */
+def config = project.hasProperty("react") ? project.react : []
+
+def reactRoot = file(config.root ?: "../../")
+def inputExcludes = config.inputExcludes ?: ["android/**", "ios/**"]
+
+// React js bundle directories
+def jsBundleAndResDir = file(config.jsBundleAndResDir ?: "$projectDir/react")
+def generatedDir = "$buildDir/generated"
+
+afterEvaluate {
+
+    def isAndroidLibrary = plugins.hasPlugin("com.android.library")
+    def variants = isAndroidLibrary ? android.libraryVariants : android.applicationVariants
+    variants.all { def variant ->
+        // Create variant and target names
+        def targetName = variant.name.capitalize()
+        def targetPath = variant.dirName
+
+        def jsBundleRootDir = file("$generatedDir/assets/react/${targetPath}")
+
+        // 遍历jsBundleAndResDir下的各个业务
+        ArrayList<File> sources = new ArrayList<>()
+        ArrayList<File> jsBundleDirs = new ArrayList<>()
+        ArrayList<File> resourcesDirs = new ArrayList<>()
+        files(jsBundleAndResDir.listFiles(new FilenameFilter() {
+            @Override
+            boolean accept(File dir, String name) {
+                //自定义过滤规则
+                return name.endsWith(".android.bundle")
+            }
+        }
+        )).each { source ->
+            // 业务目录
+            if (!source.exists() || !source.directory) {
+                return
+            }
+            sources.add(source)
+
+            def jsBundleRelativeDir = "assets/react/${targetPath}/${source.name}"
+            def resourcesRelativeDir = "res/react/${targetPath}/${source.name}"
+
+            def jsBundleDir = file("${generatedDir}/${jsBundleRelativeDir}")
+            def resourcesDir = file("${generatedDir}/${resourcesRelativeDir}")
+
+            jsBundleDirs.add(jsBundleDir)
+            resourcesDirs.add(resourcesDir)
+        }
+
+        if (sources.isEmpty()) {
+            return
+        }
+
+        // 跟react-native/react.gradle的实现有所区别
+        // 这里是巧用"bundle${targetName}JsAndAssets"来做JsAndAssets的copy
+        def currentBundleTask = tasks.create(
+                name: "bundle${targetName}JsAndAssets",
+                type: Copy) {
+            group = "react"
+            description = "bundle JS and assets for ${targetName}."
+
+            // Set up inputs and outputs so gradle can cache the result
+            inputs.files fileTree(dir: reactRoot, excludes: inputExcludes)
+            outputs.dir(jsBundleRootDir)
+
+            // 遍历jsBundleAndResDir下的各个业务
+            files(sources.toArray()).each { source ->
+                // 业务目录
+                def jsBundleRelativeDir = "assets/react/${targetPath}/${source.name}"
+                def resourcesRelativeDir = "res/react/${targetPath}/${source.name}"
+
+                def jsBundleDir = file("${generatedDir}/${jsBundleRelativeDir}")
+                def resourcesDir = file("${generatedDir}/${resourcesRelativeDir}")
+
+                // Create dirs if they are not there (e.g. the "clean" task just ran)
+                jsBundleDir.deleteDir()
+                jsBundleDir.mkdirs()
+                resourcesDir.deleteDir()
+                resourcesDir.mkdirs()
+
+                // Set up outputs so gradle can cache the result
+                //outputs.dir(jsBundleDir)
+                outputs.dir(resourcesDir)
+
+                into(generatedDir)
+                // 将react/[bundle name]下的JsBundle copy 到指定目录
+                into(jsBundleRelativeDir) {
+                    from(source)
+                    include '*.bundle'
+                }
+                // 将react/[bundle name]下的drawable copy 到指定目录
+                into(resourcesRelativeDir) {
+                    from(source)
+                    include 'drawable*/*'
+                }
+            }
+
+            enabled config."bundleIn${targetName}" ||
+                    config."bundleIn${variant.buildType.name.capitalize()}" ?:
+                    targetName.toLowerCase().contains("release")
+        }
+
+        // Expose a minimal interface on the application variant and the task itself:
+        variant.ext.bundleJsAndAssets = currentBundleTask
+        currentBundleTask.ext.generatedResFolders = files(resourcesDirs.toArray()).builtBy(currentBundleTask)
+        currentBundleTask.ext.generatedAssetsFolders = files(jsBundleDirs.toArray()).builtBy(currentBundleTask)
+
+        // registerGeneratedResFolders for Android plugin 3.x
+        if (variant.respondsTo("registerGeneratedResFolders")) {
+            variant.registerGeneratedResFolders(currentBundleTask.generatedResFolders)
+        } else {
+            variant.registerResGeneratingTask(currentBundleTask)
+        }
+        variant.mergeResourcesProvider.get().dependsOn(currentBundleTask)
+
+        // packageApplication for Android plugin 3.x
+        def packageTask = variant.hasProperty("packageApplication")
+                ? variant.packageApplicationProvider.get()
+                : tasks.findByName("package${targetName}")
+        if (variant.hasProperty("packageLibrary")) {
+            packageTask = variant.packageLibrary
+        }
+
+        // pre bundle build task for Android plugin 3.2+
+        def buildPreBundleTask = tasks.findByName("build${targetName}PreBundle")
+
+        def currentAssetsCopyTask = tasks.create(
+                name: "copy${targetName}BundledJs",
+                type: Copy) {
+            group = "react"
+            description = "copy bundled JS into ${targetName}."
+
+            into("$buildDir/intermediates")
+            into("assets/${targetPath}") {
+                from(jsBundleRootDir)
+            }
+
+            // Workaround for Android Gradle Plugin 3.2+ new asset directory
+            into("merged_assets/${variant.name}/merge${targetName}Assets/out") {
+                from(jsBundleRootDir)
+            }
+
+            // mergeAssets must run first, as it clears the intermediates directory
+            dependsOn(variant.mergeAssetsProvider.get())
+
+            enabled(currentBundleTask.enabled)
+        }
+
+        packageTask.dependsOn(currentAssetsCopyTask)
+        if (buildPreBundleTask != null) {
+            buildPreBundleTask.dependsOn(currentAssetsCopyTask)
+        }
+    }
+}

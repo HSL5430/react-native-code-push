@@ -1,0 +1,81 @@
+/*
+* Adapted from https://raw.githubusercontent.com/facebook/react-native/d16ff3bd8b92fa84a9007bf5ebedd8153e4c089d/react.gradle
+*
+* 重写/node_modules/react-native-code-push/android/codepush.gradle的实现逻辑:
+* 支持多业务分包方案, 不同的业务生成各自需要的CodePushHash
+* */
+import java.nio.file.Paths
+
+def config = project.hasProperty("react") ? project.react : []
+
+void runBefore(String dependentTaskName, Task task) {
+    Task dependentTask = tasks.findByPath(dependentTaskName)
+    if (dependentTask != null) {
+        dependentTask.dependsOn task
+    }
+}
+
+gradle.projectsEvaluated {
+    android.buildTypes.each {
+        // to prevent incorrect long value restoration from strings.xml we need to wrap it with double quotes
+        // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+        it.resValue 'string', "CODE_PUSH_APK_BUILD_TIME", String.format("\"%d\"", System.currentTimeMillis())
+    }
+
+    android.applicationVariants.all { variant ->
+        if (!variant.hasProperty("bundleJsAndAssets")) {
+            return
+        }
+
+        Task reactBundleTask = variant.bundleJsAndAssets
+        if (!reactBundleTask.hasProperty("generatedAssetsFolders")) {
+            return
+        }
+
+        def jsBundleDirs = reactBundleTask.generatedAssetsFolders
+        def resourcesDirs = reactBundleTask.generatedResFolders
+
+        if (jsBundleDirs.isEmpty()) {
+            return
+        }
+
+        def nodeModulesPath
+        if (config.root) {
+            nodeModulesPath = Paths.get(config.root, "/node_modules")
+        } else if (project.hasProperty('nodeModulesPath')) {
+            nodeModulesPath = project.nodeModulesPath
+        } else {
+            nodeModulesPath = "../../node_modules"
+        }
+        // Additional node commandline arguments
+        def nodeExecutableAndArgs = config.nodeExecutableAndArgs ?: ["node"]
+
+        def targetName = variant.name.capitalize()
+
+        for (int i = 0; i < jsBundleDirs.size(); i++) {
+            File jsBundleDir = jsBundleDirs[i]
+            File resourcesDir = resourcesDirs[i]
+            // jsBundleFile的name正好是目录的name
+            File jsBundleFile = file("${jsBundleDir}/${jsBundleDir.name}")
+
+            def indexOf = jsBundleFile.name.indexOf('.')
+            def taskSuffix = jsBundleFile.name.substring(0, 1).toUpperCase() + jsBundleFile.name.substring(1, indexOf)
+
+            // Make this task run right after the bundle task
+            def generateBundledResourcesHash = tasks.create(
+                    name: "generateBundledResourcesHash${targetName}${taskSuffix}",
+                    type: Exec) {
+                group = "react"
+                description = "generate CodePushHash for ${jsBundleFile.name}."
+                commandLine(*nodeExecutableAndArgs, "${nodeModulesPath}/react-native-code-push/scripts/generateBundledResourcesHash.js", resourcesDir.absolutePath, jsBundleFile, jsBundleDir.absolutePath)
+                enabled(reactBundleTask.enabled)
+            }
+
+            generateBundledResourcesHash.dependsOn(reactBundleTask)
+            runBefore("processArmeabi-v7a${targetName}Resources", generateBundledResourcesHash)
+            runBefore("processX86${targetName}Resources", generateBundledResourcesHash)
+            runBefore("processUniversal${targetName}Resources", generateBundledResourcesHash)
+            runBefore("process${targetName}Resources", generateBundledResourcesHash)
+        }
+    }
+}

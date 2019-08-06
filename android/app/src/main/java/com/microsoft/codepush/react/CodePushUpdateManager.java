@@ -1,5 +1,7 @@
 package com.microsoft.codepush.react;
 
+import android.text.TextUtils;
+
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
@@ -15,9 +17,11 @@ import java.nio.ByteBuffer;
 public class CodePushUpdateManager {
 
     private String mDocumentsDirectory;
+    private CodePush mCodePush;
 
-    public CodePushUpdateManager(String documentsDirectory) {
+    public CodePushUpdateManager(String documentsDirectory, CodePush codePush) {
         mDocumentsDirectory = documentsDirectory;
+        mCodePush = codePush;
     }
 
     private String getDownloadFilePath() {
@@ -34,7 +38,12 @@ public class CodePushUpdateManager {
 
     private String getCodePushPath() {
         String codePushPath = CodePushUtils.appendPathComponent(getDocumentsDirectory(), CodePushConstants.CODE_PUSH_FOLDER_PREFIX);
-        if (CodePush.isUsingTestConfiguration()) {
+        if (!TextUtils.isEmpty(mCodePush.getAssetsBundleFileName())) {
+            // 文件目录按bundle文件名(bundle name)分类:/data/data/[app包名]/files/CodePush/[bundle name]/[CodePush hash]/[CodePush version]/[bundle and drawable])
+            codePushPath = CodePushUtils.appendPathComponent(codePushPath, mCodePush.getAssetsBundleFileName());
+        }
+
+        if (mCodePush.isUsingTestConfiguration()) {
             codePushPath = CodePushUtils.appendPathComponent(codePushPath, "TestPackages");
         }
 
@@ -93,6 +102,11 @@ public class CodePushUpdateManager {
         if (relativeBundlePath == null) {
             return CodePushUtils.appendPathComponent(packageFolder, bundleFileName);
         } else {
+            File file = new File(relativeBundlePath);
+            String fileName = file.getName();
+            if (!TextUtils.equals(fileName, bundleFileName)) {
+                relativeBundlePath = new File(file.getParent(), bundleFileName).getPath();
+            }
             return CodePushUtils.appendPathComponent(packageFolder, relativeBundlePath);
         }
     }
@@ -263,16 +277,16 @@ public class CodePushUpdateManager {
                     } else {
                         throw new CodePushInvalidUpdateException(
                                 "Error! Public key was provided but there is no JWT signature within app bundle to verify. " +
-                                "Possible reasons, why that might happen: \n" +
-                                "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" +
-                                "2. You've been released CodePush bundle update without providing --privateKeyPath option."
+                                        "Possible reasons, why that might happen: \n" +
+                                        "1. You've been released CodePush bundle update using version of CodePush CLI that is not support code signing.\n" +
+                                        "2. You've been released CodePush bundle update without providing --privateKeyPath option."
                         );
                     }
                 } else {
                     if (isSignatureAppearedInBundle) {
                         CodePushUtils.log(
                                 "Warning! JWT signature exists in codepush update but code integrity check couldn't be performed because there is no public key configured. " +
-                                "Please ensure that public key is properly configured within your application."
+                                        "Please ensure that public key is properly configured within your application."
                         );
                         CodePushUpdateUtils.verifyFolderHash(newUpdateFolderPath, newUpdateHash);
                     } else {

@@ -1,6 +1,7 @@
 package com.microsoft.codepush.react;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Looper;
@@ -27,6 +28,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Date;
@@ -54,7 +56,7 @@ public class CodePushNativeModule extends ReactContextBaseJavaModule {
         mUpdateManager = codePushUpdateManager;
 
         // Initialize module state while we have a reference to the current context.
-        mBinaryContentsHash = CodePushUpdateUtils.getHashForBinaryContents(reactContext, mCodePush.isDebugMode());
+        mBinaryContentsHash = getHashForBinaryContents(mCodePush);
         mClientUniqueId = Settings.Secure.getString(reactContext.getContentResolver(), Settings.Secure.ANDROID_ID);
     }
 
@@ -133,7 +135,7 @@ public class CodePushNativeModule extends ReactContextBaseJavaModule {
                 return;
             }
 
-            String latestJSBundleFile = mCodePush.getJSBundleFileInternal(mCodePush.getAssetsBundleFileName());
+            String latestJSBundleFile = mCodePush.getJSBundleFileInternal(mCodePush.getAssetsBundleFilePath());
 
             // #2) Update the locally stored JS bundle file path
             setJSBundle(instanceManager, latestJSBundleFile);
@@ -143,7 +145,7 @@ public class CodePushNativeModule extends ReactContextBaseJavaModule {
                 @Override
                 public void run() {
                     try {
-                        // We don't need to resetReactRootViews anymore 
+                        // We don't need to resetReactRootViews anymore
                         // due the issue https://github.com/facebook/react-native/issues/14533
                         // has been fixed in RN 0.46.0
                         //resetReactRootViews(instanceManager);
@@ -190,7 +192,7 @@ public class CodePushNativeModule extends ReactContextBaseJavaModule {
 
     // Use reflection to find the ReactInstanceManager. See #556 for a proposal for a less brittle way to approach this.
     private ReactInstanceManager resolveInstanceManager() throws NoSuchFieldException, IllegalAccessException {
-        ReactInstanceManager instanceManager = CodePush.getReactInstanceManager();
+        ReactInstanceManager instanceManager = mCodePush.getReactInstanceManager();
         if (instanceManager != null) {
             return instanceManager;
         }
@@ -637,5 +639,31 @@ public class CodePushNativeModule extends ReactContextBaseJavaModule {
     public void clearUpdates() {
         CodePushUtils.log("Clearing updates.");
         mCodePush.clearUpdates();
+    }
+
+    /**
+     * 重写{@link CodePushUpdateUtils#getHashForBinaryContents(Context, boolean)}的实现, 分业务目录读取{@link CodePushConstants#CODE_PUSH_HASH_FILE_NAME}
+     */
+    public String getHashForBinaryContents(CodePush codePush) {
+        // return CodePushUpdateUtils.getHashForBinaryContents(getReactApplicationContext(), codePush.isDebugMode());
+        Context context = codePush.getContext();
+        String assetsBundleDir = codePush.getAssetsBundleFileDir();
+        String codePushHashFilePath;
+        try {
+            codePushHashFilePath = new File(assetsBundleDir, CodePushConstants.CODE_PUSH_HASH_FILE_NAME).getPath();
+            return CodePushUtils.getStringFromInputStream(context.getAssets().open(codePushHashFilePath));
+        } catch (IOException e) {
+            try {
+                codePushHashFilePath = new File(assetsBundleDir, CodePushConstants.CODE_PUSH_OLD_HASH_FILE_NAME).getPath();
+                return CodePushUtils.getStringFromInputStream(context.getAssets().open(codePushHashFilePath));
+            } catch (IOException ex) {
+                if (!codePush.isDebugMode()) {
+                    // Only print this message in "Release" mode. In "Debug", we may not have the
+                    // hash if the build skips bundling the files.
+                    CodePushUtils.log("Unable to get the hash of the binary's bundled resources - \"codepush.gradle\" may have not been added to the build definition.");
+                }
+            }
+            return null;
+        }
     }
 }
