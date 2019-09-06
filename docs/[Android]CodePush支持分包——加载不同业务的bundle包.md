@@ -6,7 +6,7 @@
 fork了[https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push)，并提交了重构后的代码：[https://github.com/hsl5430/react-native-code-push](https://github.com/hsl5430/react-native-code-push)
 
 ## 申明
-- 下文均以**[reactProject]**标识react native项目根目录
+- 下文均以**\[reactProject\]**标识react native项目根目录
 - react native简称rn
 - react native版本：0.59.5
 - CodePush版本：5.6.1
