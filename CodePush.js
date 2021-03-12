@@ -2,7 +2,6 @@ import { AcquisitionManager as Sdk } from "code-push/script/acquisition-sdk";
 import { Alert } from "./AlertAdapter";
 import requestFetchAdapter from "./request-fetch-adapter";
 import { AppState, Platform } from "react-native";
-import RestartManager from "./RestartManager";
 import log from "./logging";
 import hoistStatics from 'hoist-non-react-statics';
 
@@ -189,6 +188,10 @@ async function tryReportStatus(statusReport, resumeListener) {
     if (statusReport.appVersion) {
       log(`Reporting binary update (${statusReport.appVersion})`);
 
+      if (!config.deploymentKey) {
+        throw new Error("Deployment key is missed");
+      }
+
       const sdk = getPromisifiedSdk(requestFetchAdapter, config);
       await sdk.reportStatusDeploy(/* deployedPackage */ null, /* status */ null, previousLabelOrAppVersion, previousDeploymentKey);
     } else {
@@ -298,6 +301,10 @@ function setUpTestDependencies(testSdk, providedTestConfig, testNativeBridge) {
   if (testSdk) module.exports.AcquisitionSdk = testSdk;
   if (providedTestConfig) testConfig = providedTestConfig;
   if (testNativeBridge) NativeCodePush = testNativeBridge;
+}
+
+async function restartApp(onlyIfUpdateIsPending = false) {
+  NativeCodePush.restartApp(onlyIfUpdateIsPending);
 }
 
 // This function allows only one syncInternal operation to proceed at any given time.
@@ -605,11 +612,11 @@ if (NativeCodePush) {
     log,
     notifyAppReady: notifyApplicationReady,
     notifyApplicationReady,
-    restartApp: RestartManager.restartApp,
+    restartApp,
     setUpTestDependencies,
     sync,
-    disallowRestart: RestartManager.disallow,
-    allowRestart: RestartManager.allow,
+    disallowRestart: NativeCodePush.disallow,
+    allowRestart: NativeCodePush.allow,
     clearUpdates: NativeCodePush.clearUpdates,
     InstallMode: {
       IMMEDIATE: NativeCodePush.codePushInstallModeImmediate, // Restart the app immediately

@@ -19,6 +19,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,7 +42,7 @@ public class CodePush implements ReactPackage {
 
     // Config properties.
     private String mDeploymentKey;
-    private String mServerUrl = "https://codepush.azurewebsites.net/";
+    private String mServerUrl = "https://codepush.appcenter.ms/";
 
     private Context mContext;
     private final boolean mIsDebugMode;
@@ -69,6 +70,12 @@ public class CodePush implements ReactPackage {
                 throw new CodePushUnknownException("Unable to get package info for " + mContext.getPackageName(), e);
             }
         }
+
+        String publicKeyFromStrings = getCustomPropertyFromStringsIfExist("PublicKey");
+        if (publicKeyFromStrings != null) mPublicKey = publicKeyFromStrings;
+
+        String serverUrlFromStrings = getCustomPropertyFromStringsIfExist("ServerUrl");
+        if (serverUrlFromStrings != null) mServerUrl = serverUrlFromStrings;
 
         clearDebugCacheIfNeeded(null);
         initializeUpdateAfterRestart();
@@ -111,20 +118,50 @@ public class CodePush implements ReactPackage {
         return publicKey;
     }
 
-    public void clearDebugCacheIfNeeded(ReactInstanceManager instanceManager) {
-        boolean isLiveReloadEnabled = false;
+    private String getCustomPropertyFromStringsIfExist(String propertyName) {
+        String property;
 
-        // Use instanceManager for checking if we use LiveRelaod mode. In this case we should not remove ReactNativeDevBundle.js file
-        // because we get error with trying to get this after reloading. Issue: https://github.com/Microsoft/react-native-code-push/issues/1272
+        String packageName = mContext.getPackageName();
+        int resId = mContext.getResources().getIdentifier("CodePush" + propertyName, "string", packageName);
+
+        if (resId != 0) {
+            property = mContext.getString(resId);
+
+            if (!property.isEmpty()) {
+                return property;
+            } else {
+                CodePushUtils.log("Specified " + propertyName + " is empty");
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isLiveReloadEnabled(ReactInstanceManager instanceManager) {
+        // Use instanceManager for checking if we use LiveReload mode. In this case we should not remove ReactNativeDevBundle.js file
+        // because we get error with trying to get this after reloading. Issue: https://github.com/microsoft/react-native-code-push/issues/1272
         if (instanceManager != null) {
             DevSupportManager devSupportManager = instanceManager.getDevSupportManager();
             if (devSupportManager != null) {
                 DevInternalSettings devInternalSettings = (DevInternalSettings) devSupportManager.getDevSettings();
-                isLiveReloadEnabled = devInternalSettings.isReloadOnJSChangeEnabled();
+                Method[] methods = devInternalSettings.getClass().getMethods();
+                for (Method m : methods) {
+                    if (m.getName().equals("isReloadOnJSChangeEnabled")) {
+                        try {
+                            return (boolean) m.invoke(devInternalSettings);
+                        } catch (Exception x) {
+                            return false;
+                        }
+                    }
+                }
             }
         }
 
-        if (mIsDebugMode && mSettingsManager.isPendingUpdate(null) && !isLiveReloadEnabled) {
+        return false;
+    }
+
+    public void clearDebugCacheIfNeeded(ReactInstanceManager instanceManager) {
+        if (mIsDebugMode && mSettingsManager.isPendingUpdate(null) && !isLiveReloadEnabled(instanceManager)) {
             // This needs to be kept in sync with https://github.com/facebook/react-native/blob/master/ReactAndroid/src/main/java/com/facebook/react/devsupport/DevSupportManager.java#L78
             File cachedDevBundle = new File(mContext.getFilesDir(), "ReactNativeDevBundle.js");
             if (cachedDevBundle.exists()) {
@@ -170,7 +207,7 @@ public class CodePush implements ReactPackage {
             String packageName = context.getPackageName();
             int codePushApkBuildTimeId = context.getResources().getIdentifier(CodePushConstants.CODE_PUSH_APK_BUILD_TIME_KEY, "string", packageName);
             // replace double quotes needed for correct restoration of long value from strings.xml
-            // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+            // https://github.com/microsoft/cordova-plugin-code-push/issues/264
             String codePushApkBuildTime = context.getResources().getString(codePushApkBuildTimeId).replaceAll("\"", "");
             return Long.parseLong(codePushApkBuildTime);
         } catch (Exception e) {

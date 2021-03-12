@@ -1,5 +1,6 @@
 package com.microsoft.codepush.react;
 
+import android.os.Build;
 import android.text.TextUtils;
 
 import org.json.JSONObject;
@@ -13,6 +14,8 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+
+import javax.net.ssl.HttpsURLConnection;
 
 public class CodePushUpdateManager {
 
@@ -177,6 +180,16 @@ public class CodePushUpdateManager {
         try {
             URL downloadUrl = new URL(downloadUrlString);
             connection = (HttpURLConnection) (downloadUrl.openConnection());
+
+            if (android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP &&
+                    downloadUrl.toString().startsWith("https")) {
+                try {
+                    ((HttpsURLConnection) connection).setSSLSocketFactory(new TLSSocketFactory());
+                } catch (Exception e) {
+                    throw new CodePushUnknownException("Error set SSLSocketFactory. ", e);
+                }
+            }
+
             connection.setRequestProperty("Accept-Encoding", "identity");
             bin = new BufferedInputStream(connection.getInputStream());
 
