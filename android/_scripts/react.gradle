@@ -2,10 +2,32 @@
 * 重写/node_modules/react-native/react.gradle的实现逻辑:
 * 支持多业务分包方案, /react目录下以业务bundle名称作为文件夹名称来存放各个业务的bundle文件合关联的资源文件
 * */
-def config = project.hasProperty("react") ? project.react : []
+def config = project.hasProperty("react") ? project.react : [:]
 
 def reactRoot = file(config.root ?: "../../")
 def inputExcludes = config.inputExcludes ?: ["android/**", "ios/**"]
+def enableVmCleanup = config.enableVmCleanup == null || config.enableVmCleanup
+
+def reactNativeDevServerPort() {
+    return project.getProperties().get("reactNativeDevServerPort") ?: "8081"
+}
+
+def reactNativeInspectorProxyPort() {
+    return project.getProperties().get("reactNativeInspectorProxyPort") ?: reactNativeDevServerPort()
+}
+
+// Set enableHermesForVariant to a function to configure per variant,
+// or set `enableHermes` to True/False to set all of them
+def enableHermesForVariant = config.enableHermesForVariant ?: {
+    def variant -> config.enableHermes ?: false
+}
+
+android {
+    buildTypes.all {
+        resValue "integer", "react_native_dev_server_port", reactNativeDevServerPort()
+        resValue "integer", "react_native_inspector_proxy_port", reactNativeInspectorProxyPort()
+    }
+}
 
 // React js bundle directories
 def jsBundleAndResDir = file(config.jsBundleAndResDir ?: "$projectDir/react")
@@ -53,6 +75,8 @@ afterEvaluate {
         if (sources.isEmpty()) {
             return
         }
+
+        def enableHermes = enableHermesForVariant(variant)
 
         // 跟react-native/react.gradle的实现有所区别
         // 这里是巧用"bundle${targetName}JsAndAssets"来做JsAndAssets的copy
@@ -157,13 +181,53 @@ afterEvaluate {
         // mergeResources task runs before the bundle file is copied to the intermediate asset directory from Android plugin 4.1+.
         // This ensures to copy the bundle file before mergeResources task starts
         def mergeResourcesTask = tasks.findByName("merge${targetName}Resources")
-        if(mergeResourcesTask != null) {
+        if (mergeResourcesTask != null) {
             mergeResourcesTask.dependsOn(currentAssetsCopyTask)
         }
 
         packageTask.dependsOn(currentAssetsCopyTask)
         if (buildPreBundleTask != null) {
             buildPreBundleTask.dependsOn(currentAssetsCopyTask)
+        }
+        // Delete the VM related libraries that this build doesn't need.
+        // The application can manage this manually by setting 'enableVmCleanup: false'
+        //
+        // This should really be done by packaging all Hermes releated libs into
+        // two separate HermesDebug and HermesRelease AARs, but until then we'll
+        // kludge it by deleting the .so files out of the /transforms/ directory.
+        def isRelease = targetName.toLowerCase().contains("release")
+        def libDir = "$buildDir/intermediates/transforms/"
+        def vmSelectionAction = {
+            fileTree(libDir).matching {
+                if (enableHermes) {
+                    // For Hermes, delete all the libjsc* files
+                    include "**/libjsc*.so"
+
+                    if (isRelease) {
+                        // Reduce size by deleting the debugger/inspector
+                        include '**/libhermes-inspector.so'
+                        include '**/libhermes-executor-debug.so'
+                    } else {
+                        // Release libs take precedence and must be removed
+                        // to allow debugging
+                        include '**/libhermes-executor-release.so'
+                    }
+                } else {
+                    // For JSC, delete all the libhermes* files
+                    include "**/libhermes*.so"
+                }
+            }.visit { details ->
+                def targetVariant = ".*/transforms/[^/]*/${targetPath}/.*"
+                def path = details.file.getAbsolutePath().replace(File.separatorChar, '/' as char)
+                if (path.matches(targetVariant) && details.file.isFile()) {
+                    details.file.delete()
+                }
+            }
+        }
+
+        if (enableVmCleanup) {
+            def task = tasks.findByName("package${targetName}")
+            task.doFirst(vmSelectionAction)
         }
     }
 }
