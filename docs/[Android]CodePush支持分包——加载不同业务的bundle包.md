@@ -5,11 +5,21 @@
 
 fork了[https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push)，并提交了重构后的代码：[https://github.com/hsl5430/react-native-code-push](https://github.com/hsl5430/react-native-code-push)
 
+
+## 修改记录
+| 日期           | 说明    |建议React Native版本 |
+| ----------------------- | ---------------------------- | ---------------------------- |
+| 2021-03-12    | 同步更新 [https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push) 最新代码v7.0.0 | v0.63.4(支持Androidx) |
+| 2019-09-06    | 提交文档等 |
+| 2019-08-06    | fork [https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push) v5.6.1，并重构 | v0.59.10(不支持Androidx的最后一个版本) |
+
+
 ## 申明
 - 下文均以**\[reactProject\]**标识react native项目根目录
 - react native简称rn
-- react native版本：0.59.5
-- CodePush版本：5.6.1
+- react native版本：0.63.4
+- CodePush版本：7.0.0
+- 未升级Androidx的项目可以`git checkout 670620a54d05c50464d195eecc061af07a4ccf8d`，对应react native版本：0.59.10，CodePush版本：5.6.1
 
 ***
 
@@ -84,7 +94,7 @@ apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"
 gradle.projectsEvaluated {
     android.buildTypes.each {
         // to prevent incorrect long value restoration from strings.xml we need to wrap it with double quotes
-        // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+        // https://github.com/microsoft/cordova-plugin-code-push/issues/264
         it.resValue 'string', "CODE_PUSH_APK_BUILD_TIME", String.format("\"%d\"", System.currentTimeMillis())
     }
     ...
@@ -98,7 +108,7 @@ long getBinaryResourcesModifiedTime() {
         String packageName = this.mContext.getPackageName();
         int codePushApkBuildTimeId = this.mContext.getResources().getIdentifier(CodePushConstants.CODE_PUSH_APK_BUILD_TIME_KEY, "string", packageName);
         // replace double quotes needed for correct restoration of long value from strings.xml
-        // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+        // https://github.com/microsoft/cordova-plugin-code-push/issues/264
         String codePushApkBuildTime = this.mContext.getResources().getString(codePushApkBuildTimeId).replaceAll("\"", "");
         return Long.parseLong(codePushApkBuildTime);
     } catch (Exception e) {
@@ -436,7 +446,7 @@ void runBefore(String dependentTaskName, Task task) {
 gradle.projectsEvaluated {
     android.buildTypes.each {
         // to prevent incorrect long value restoration from strings.xml we need to wrap it with double quotes
-        // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+        // https://github.com/microsoft/cordova-plugin-code-push/issues/264
         it.resValue 'string', "CODE_PUSH_APK_BUILD_TIME", String.format("\"%d\"", System.currentTimeMillis())
     }
 
