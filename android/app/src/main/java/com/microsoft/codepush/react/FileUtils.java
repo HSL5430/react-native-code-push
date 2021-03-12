@@ -70,8 +70,14 @@ public class FileUtils {
     }
 
     public static void deleteFileOrFolderSilently(File file) {
+        if (file == null) {
+            return;
+        }
         if (file.isDirectory()) {
             File[] files = file.listFiles();
+            if (files == null) {
+                return;
+            }
             for (File fileEntry : files) {
                 if (fileEntry.isDirectory()) {
                     deleteFileOrFolderSilently(fileEntry);
