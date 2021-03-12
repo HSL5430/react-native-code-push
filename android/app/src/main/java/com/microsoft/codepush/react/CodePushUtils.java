@@ -51,7 +51,7 @@ public class CodePushUtils {
                 arr.pushInt((Integer) obj);
             else if (obj instanceof Boolean)
                 arr.pushBoolean((Boolean) obj);
-            else if (obj == null)
+            else if (JSONObject.NULL.equals(obj))
                 arr.pushNull();
             else
                 throw new CodePushUnknownException("Unrecognized object: " + obj);
@@ -87,7 +87,7 @@ public class CodePushUtils {
                 map.putInt(key, (Integer) obj);
             else if (obj instanceof Boolean)
                 map.putBoolean(key, (Boolean) obj);
-            else if (obj == null)
+            else if (JSONObject.NULL.equals(obj))
                 map.putNull(key);
             else
                 throw new CodePushUnknownException("Unrecognized object: " + obj);
