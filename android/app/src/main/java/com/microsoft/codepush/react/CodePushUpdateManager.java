@@ -44,9 +44,10 @@ public class CodePushUpdateManager {
 
     private String getCodePushPath() {
         String codePushPath = CodePushUtils.appendPathComponent(getDocumentsDirectory(), CodePushConstants.CODE_PUSH_FOLDER_PREFIX);
-        if (!TextUtils.isEmpty(mCodePush.getAssetsBundleFileName())) {
+        String assetsBundleFileName = mCodePush.getAssetsBundleFileName();
+        if (!TextUtils.isEmpty(assetsBundleFileName)) {
             // 文件目录按bundle文件名(bundle name)分类:/data/data/[app包名]/files/CodePush/[bundle name]/[CodePush hash]/[CodePush version]/[bundle and drawable])
-            codePushPath = CodePushUtils.appendPathComponent(codePushPath, mCodePush.getAssetsBundleFileName());
+            codePushPath = CodePushUtils.appendPathComponent(codePushPath, assetsBundleFileName);
         }
 
         if (mCodePush.isUsingTestConfiguration()) {
@@ -84,12 +85,10 @@ public class CodePushUpdateManager {
     }
 
     public String getCurrentPackageFolderPath() {
-        JSONObject info = getCurrentPackageInfo();
-        String packageHash = info.optString(CodePushConstants.CURRENT_PACKAGE_KEY, null);
+        String packageHash = getCurrentPackageHash();
         if (packageHash == null) {
             return null;
         }
-
         return getPackageFolderPath(packageHash);
     }
 
@@ -122,34 +121,33 @@ public class CodePushUpdateManager {
     }
 
     public String getCurrentPackageHash() {
-        JSONObject info = getCurrentPackageInfo();
+        return getCurrentPackageHash(getCurrentPackageInfo());
+    }
+
+    private String getCurrentPackageHash(JSONObject info) {
         return info.optString(CodePushConstants.CURRENT_PACKAGE_KEY, null);
     }
 
     public String getPreviousPackageHash() {
-        JSONObject info = getCurrentPackageInfo();
+        return getPreviousPackageHash(getCurrentPackageInfo());
+    }
+
+    private String getPreviousPackageHash(JSONObject info) {
         return info.optString(CodePushConstants.PREVIOUS_PACKAGE_KEY, null);
     }
 
     public JSONObject getCurrentPackage() {
-        String packageHash = getCurrentPackageHash();
-        if (packageHash == null) {
-            return null;
-        }
-
-        return getPackage(packageHash);
+        return getPackage(getCurrentPackageHash());
     }
 
     public JSONObject getPreviousPackage() {
-        String packageHash = getPreviousPackageHash();
-        if (packageHash == null) {
-            return null;
-        }
-
-        return getPackage(packageHash);
+        return getPackage(getPreviousPackageHash());
     }
 
     public JSONObject getPackage(String packageHash) {
+        if (packageHash == null) {
+            return null;
+        }
         String folderPath = getPackageFolderPath(packageHash);
         String packageFilePath = CodePushUtils.appendPathComponent(folderPath, CodePushConstants.PACKAGE_FILE_NAME);
         try {
@@ -330,24 +328,23 @@ public class CodePushUpdateManager {
         String packageHash = updatePackage.optString(CodePushConstants.PACKAGE_HASH_KEY, null);
         JSONObject info = getCurrentPackageInfo();
 
-        String currentPackageHash = info.optString(CodePushConstants.CURRENT_PACKAGE_KEY, null);
+        String currentPackageHash = getCurrentPackageHash(info);
         if (packageHash != null && packageHash.equals(currentPackageHash)) {
             // The current package is already the one being installed, so we should no-op.
             return;
         }
 
         if (removePendingUpdate) {
-            String currentPackageFolderPath = getCurrentPackageFolderPath();
+            String currentPackageFolderPath = getPackageFolderPath(currentPackageHash);
             if (currentPackageFolderPath != null) {
                 FileUtils.deleteDirectoryAtPath(currentPackageFolderPath);
             }
         } else {
-            String previousPackageHash = getPreviousPackageHash();
+            String previousPackageHash = getPreviousPackageHash(info);
             if (previousPackageHash != null && !previousPackageHash.equals(packageHash)) {
                 FileUtils.deleteDirectoryAtPath(getPackageFolderPath(previousPackageHash));
             }
-
-            CodePushUtils.setJSONValueForKey(info, CodePushConstants.PREVIOUS_PACKAGE_KEY, info.optString(CodePushConstants.CURRENT_PACKAGE_KEY, null));
+            CodePushUtils.setJSONValueForKey(info, CodePushConstants.PREVIOUS_PACKAGE_KEY, currentPackageHash);
         }
 
         CodePushUtils.setJSONValueForKey(info, CodePushConstants.CURRENT_PACKAGE_KEY, packageHash);
@@ -358,7 +355,7 @@ public class CodePushUpdateManager {
         JSONObject info = getCurrentPackageInfo();
         String currentPackageFolderPath = getCurrentPackageFolderPath();
         FileUtils.deleteDirectoryAtPath(currentPackageFolderPath);
-        CodePushUtils.setJSONValueForKey(info, CodePushConstants.CURRENT_PACKAGE_KEY, info.optString(CodePushConstants.PREVIOUS_PACKAGE_KEY, null));
+        CodePushUtils.setJSONValueForKey(info, CodePushConstants.CURRENT_PACKAGE_KEY, getPreviousPackageHash(info));
         CodePushUtils.setJSONValueForKey(info, CodePushConstants.PREVIOUS_PACKAGE_KEY, null);
         updateCurrentPackageInfo(info);
     }
