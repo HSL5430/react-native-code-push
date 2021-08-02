@@ -9,6 +9,7 @@ fork了[https://github.com/microsoft/react-native-code-push](https://github.com/
 ## 修改记录
 | 日期           | 说明    |建议React Native版本 |
 | ----------------------- | ---------------------------- | ---------------------------- |
+| 2021-08-02    | 同步更新 [https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push) 最新代码v7.0.1 | v0.63.4(支持Androidx) |
 | 2021-03-12    | 同步更新 [https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push) 最新代码v7.0.0 | v0.63.4(支持Androidx) |
 | 2019-09-06    | 提交文档等 |
 | 2019-08-06    | fork [https://github.com/microsoft/react-native-code-push](https://github.com/microsoft/react-native-code-push) v5.6.1，并重构 | v0.59.10(不支持Androidx的最后一个版本) |
@@ -18,7 +19,7 @@ fork了[https://github.com/microsoft/react-native-code-push](https://github.com/
 - 下文均以**\[reactProject\]**标识react native项目根目录
 - react native简称rn
 - react native版本：0.63.4
-- CodePush版本：7.0.0
+- CodePush版本：7.0.1
 - 未升级Androidx的项目可以`git checkout 670620a54d05c50464d195eecc061af07a4ccf8d`，对应react native版本：0.59.10，CodePush版本：5.6.1
 
 ***
