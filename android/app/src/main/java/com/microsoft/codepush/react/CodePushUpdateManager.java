@@ -1,7 +1,10 @@
 package com.microsoft.codepush.react;
 
 import android.os.Build;
+import android.os.SystemClock;
 import android.text.TextUtils;
+
+import com.facebook.react.modules.network.TLSSocketFactory;
 
 import org.json.JSONObject;
 
@@ -199,6 +202,9 @@ public class CodePushUpdateManager {
             File downloadFolder = new File(getCodePushPath());
             downloadFolder.mkdirs();
             downloadFile = new File(downloadFolder, CodePushConstants.DOWNLOAD_FILE_NAME);
+            if (downloadFile.exists()) {
+                downloadFile = new File(downloadFolder, SystemClock.elapsedRealtime() + "_" + CodePushConstants.DOWNLOAD_FILE_NAME);
+            }
             fos = new FileOutputStream(downloadFile);
             bout = new BufferedOutputStream(fos, CodePushConstants.DOWNLOAD_BUFFER_SIZE);
             byte[] data = new byte[CodePushConstants.DOWNLOAD_BUFFER_SIZE];
