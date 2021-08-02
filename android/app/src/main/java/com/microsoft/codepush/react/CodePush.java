@@ -178,7 +178,19 @@ public class CodePush implements ReactPackage {
         return sAppVersion;
     }
 
+    public void setExpectedBundleFileName(String expectedBundleFileName) {
+        this.mAssetsBundleFileName = expectedBundleFileName;
+    }
+
     public String getAssetsBundleFileName() {
+        if (TextUtils.isEmpty(mAssetsBundleFileName)) {
+            if (TextUtils.isEmpty(mAssetsBundleFilePath)) {
+                mAssetsBundleFileName = CodePushConstants.DEFAULT_JS_BUNDLE_NAME;
+            } else {
+                File file = new File(mAssetsBundleFilePath);
+                mAssetsBundleFileName = file.getName();
+            }
+        }
         return mAssetsBundleFileName;
     }
 
@@ -245,20 +257,23 @@ public class CodePush implements ReactPackage {
         return getJSBundleFile(CodePushConstants.DEFAULT_JS_BUNDLE_NAME);
     }
 
-    public String getJSBundleFile(String assetsBundleFileName) {
-        return getJSBundleFileInternal(assetsBundleFileName);
+    public String getJSBundleFile(String assetsBundleFilePath) {
+        return getJSBundleFile(assetsBundleFilePath, null);
     }
 
-    public String getJSBundleFileInternal(String assetsBundleFileName) {
+    public String getJSBundleFile(String assetsBundleFilePath, String expectedBundleFileName) {
+        setExpectedBundleFileName(expectedBundleFileName);
+        return getJSBundleFileInternal(assetsBundleFilePath);
+    }
+
+    String getJSBundleFileInternal(String assetsBundleFilePath) {
         // 支持assets文件路径
-        this.mAssetsBundleFilePath = assetsBundleFileName;
-        File file = new File(assetsBundleFileName);
-        mAssetsBundleFileName = file.getName();
-        String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
+        this.mAssetsBundleFilePath = assetsBundleFilePath;
+        String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFilePath;
 
         String packageFilePath = null;
         try {
-            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
+            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(getAssetsBundleFileName());
         } catch (CodePushMalformedDataException e) {
             // We need to recover the app in case 'codepush.json' is corrupted
             CodePushUtils.log(e.getMessage());
